@@ -14,7 +14,6 @@ export default function HomePage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [travelers, setTravelers] = useState(2);
-  const [budget, setBudget] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +30,6 @@ export default function HomePage() {
         startDate,
         endDate,
         people: travelers,
-        budget: budget ? Number(budget) : 0,
       };
 
       const res = await fetch('/api/plan', {
@@ -52,6 +50,8 @@ export default function HomePage() {
         destination: data.destination,
         startDate: data.startDate,
         endDate: data.endDate,
+        estimated_budget: data.estimated_budget,
+        external_links: data.external_links,
         summary: data.summary,
         days: data.days,
       };
@@ -104,12 +104,13 @@ export default function HomePage() {
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
           여행지를 입력하면,
           <br />
-          <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            AI가 모든 것을 최적화해드립니다
+          <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent whitespace-nowrap inline-block">
+            AI가 최적 비용을 자동 계산해드립니다
           </span>
         </h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          예산부터 일정까지, 대학생을 위한 맞춤형 여행 계획 서비스
+        <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed px-4">
+          최신 물가 정보를 기반으로 최적 비용을 산출하고,<br className="hidden md:inline" />
+          그에 맞는 맞춤형 여행 계획을 생성합니다.
         </p>
       </section>
 
@@ -118,7 +119,7 @@ export default function HomePage() {
         <CardHeader>
           <CardTitle className="text-2xl">여행 정보 입력</CardTitle>
           <CardDescription>
-            필수 정보만 입력하시면 AI가 맞춤형 여행 계획을 생성합니다.
+            필수 정보만 입력하시면 AI가 최신 물가 정보를 기반으로 최적 비용을 계산하고 맞춤형 여행 계획을 생성합니다.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -152,7 +153,7 @@ export default function HomePage() {
                   onChange={(e) => setStartDate(e.target.value)}
                   required
                   disabled={loading}
-                  className="h-12"
+                  className="h-12 text-base"
                 />
               </div>
               <div className="space-y-2">
@@ -167,42 +168,28 @@ export default function HomePage() {
                   onChange={(e) => setEndDate(e.target.value)}
                   required
                   disabled={loading}
-                  className="h-12"
+                  className="h-12 text-base"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="travelers" className="text-base font-medium">
-                  인원 (선택)
-                </Label>
-                <Input
-                  id="travelers"
-                  name="people"
-                  type="number"
-                  min="1"
-                  value={travelers}
-                  onChange={(e) => setTravelers(Number(e.target.value))}
-                  disabled={loading}
-                  className="h-12"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="budget" className="text-base font-medium">
-                  총 예산 (선택)
-                </Label>
-                <Input
-                  id="budget"
-                  name="budget"
-                  type="number"
-                  placeholder="예: 500000"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
-                  disabled={loading}
-                  className="h-12"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="travelers" className="text-base font-medium">
+                인원 (선택)
+              </Label>
+              <Input
+                id="travelers"
+                name="people"
+                type="number"
+                min="1"
+                value={travelers}
+                onChange={(e) => setTravelers(Number(e.target.value))}
+                disabled={loading}
+                className="h-12"
+              />
+              <p className="text-sm text-muted-foreground">
+                인원수를 입력하면 더 정확한 비용을 계산할 수 있습니다.
+              </p>
             </div>
 
             <Button

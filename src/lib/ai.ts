@@ -1,7 +1,12 @@
 // src/lib/ai.ts
 import 'server-only';
 
-type GenOpts = { prompt: string; json?: boolean };
+type GenOpts = { 
+  prompt: string; 
+  json?: boolean;
+  searchContext?: string; // 검색 결과 컨텍스트
+  enableSearch?: boolean; // 검색 기능 활성화
+};
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,21 +51,40 @@ async function fetchWithRetry(
   throw lastError || new Error('재시도 횟수 초과');
 }
 
-export async function generateText({ prompt, json = false }: GenOpts): Promise<string> {
-  const provider = (process.env.AI_PROVIDER || 'openai').toLowerCase().trim();
+export async function generateText({ prompt, json = false, searchContext, enableSearch }: GenOpts): Promise<string> {
+  const provider = (process.env.AI_PROVIDER || 'google').toLowerCase().trim();
   const key = process.env.AI_API_KEY;
   if (!key) throw new Error('Missing AI_API_KEY in environment variables');
+
+  // 검색 컨텍스트가 있으면 프롬프트에 추가
+  let finalPrompt = prompt;
+  if (searchContext) {
+    finalPrompt = `${searchContext}\n\n---\n\n${prompt}`;
+  }
 
   // --- Google AI Studio (Gemini) ---
   if (provider === 'google' || provider === 'gemini') {
     const model = process.env.GOOGLE_MODEL || 'gemini-2.5-flash';
+    
+    // Gemini 2.0 Flash 모델은 Google Search 통합을 지원하므로 tools 활성화
+    const useSearchTool = enableSearch && model.includes('2.0');
+    
     const url =
       `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent` +
       `?key=${encodeURIComponent(key)}`;
 
     const body: any = {
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
     };
+    
+    // Google Search Tool 활성화 (Gemini 2.0 이상)
+    if (useSearchTool) {
+      body.tools = [
+        {
+          googleSearchRetrieval: {}
+        }
+      ];
+    }
     
     // Google Gemini는 generationConfig에서 JSON을 강제할 수 없으므로
     // 프롬프트에서 JSON 형식을 명시하는 방식 사용
@@ -115,9 +139,26 @@ export async function generateText({ prompt, json = false }: GenOpts): Promise<s
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: prompt }],
+          model: enableSearch ? 'gpt-4o' : 'gpt-4o-mini', // 검색 활성화 시 더 강력한 모델 사용
+          messages: [{ role: 'user', content: finalPrompt }],
           temperature: 0.7,
+          ...(enableSearch && {
+            tools: [{
+              type: 'function',
+              function: {
+                name: 'search_web',
+                description: 'Search the web for current information',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    query: { type: 'string', description: 'Search query' }
+                  },
+                  required: ['query']
+                }
+              }
+            }],
+            tool_choice: 'auto'
+          })
         }),
       },
       3,
@@ -144,8 +185,8 @@ export async function generateText({ prompt, json = false }: GenOpts): Promise<s
         },
         body: JSON.stringify({
           model: 'claude-3-5-sonnet-latest',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: finalPrompt }],
         }),
       },
       3,
@@ -181,15 +222,20 @@ export async function generateText({ prompt, json = false }: GenOpts): Promise<s
   }
 
   // --- Perplexity ---
+  // Perplexity는 기본적으로 온라인 검색 기능이 활성화되어 있음
   if (provider === 'perplexity') {
+    const model = enableSearch 
+      ? 'llama-3.1-sonar-large-128k-online' // 검색 활성화 시 더 강력한 모델
+      : 'llama-3.1-sonar-small-128k-online';
+    
     const res = await fetchWithRetry(
       'https://api.perplexity.ai/chat/completions',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
-          model: 'llama-3.1-sonar-small-128k-online',
-          messages: [{ role: 'user', content: prompt }],
+          model,
+          messages: [{ role: 'user', content: finalPrompt }],
           temperature: 0.7,
         }),
       },
