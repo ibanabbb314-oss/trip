@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 const navigation = [
   { name: '홈', href: '/home', icon: Home },
-  { name: '도움말', href: '/help/live', icon: HelpCircle },
+  { name: '도움말', href: '/help', icon: HelpCircle },
 ];
 
 export default function Header() {

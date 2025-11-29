@@ -28,8 +28,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/help/live" className="hover:text-primary">
-                  실시간 도움말
+                <Link href="/help" className="hover:text-primary">
+                  도움말
                 </Link>
               </li>
             </ul>

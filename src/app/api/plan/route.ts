@@ -8,7 +8,7 @@ import { format, addDays, parseISO } from 'date-fns';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { destination, startDate, endDate, people } = body || {};
+    const { destination, startDate, endDate, people, arrivalTime, departureTime } = body || {};
     // budget 필드는 이제 선택사항이며, AI가 자동으로 계산함
 
     if (!destination || !startDate || !endDate) {
@@ -113,7 +113,8 @@ JSON 스키마:
     "overview": "",
     "notes": "",
     "accommodation_selection_reason": "",
-    "accommodation_search_area": ""
+    "accommodation_search_area": "",
+    "destination_image_query": ""
   },
   "days": [
     {
@@ -129,7 +130,10 @@ JSON 스키마:
           "notes": "",
           "cost": 0,
           "next_move_duration": "",
-          "image_search_link": ""
+          "image_search_link": "",
+          "activity_image_query": "",
+          "official_website_link": "",
+          "purchase_search_link": ""
         }
       ]
     }
@@ -144,54 +148,129 @@ ${destinationIataCode ? `- destination_airport_code: ${destinationIataCode} (${d
 - people: ${people ?? 1}
 - dates: ${JSON.stringify(dateArray)}
 - totalDays: ${totalDays}
+${arrivalTime ? `- arrivalTime: ${arrivalTime} (출국편의 여행지 도착 시각 - 첫날 일정은 이 시간 이후부터 시작)` : `- arrivalTime: (미지정 - 첫날 오전부터 일정 시작 가능)`}
+${departureTime ? `- departureTime: ${departureTime} (귀국편의 여행지 출발 시각 - 마지막 날 일정은 이 시간 이전에 종료)` : `- departureTime: (미지정 - 마지막 날 오후까지 일정 가능)`}
 
 요구사항:
 1. startDate~endDate 사이 모든 날짜를 days 배열에 포함 (총 ${totalDays}일)
+   - **중요:** 일정은 여행지 공항 도착부터 시작해야 합니다. 인천공항 출발이나 항공편 탑승 과정은 포함하지 마세요.
+   - 첫날의 첫 번째 활동은 여행지 공항 도착 후 공항을 떠나 실제 활동을 시작하는 시점부터입니다.
+   - 마지막 날의 마지막 활동은 여행지 공항으로 가는 과정까지이며, 항공편 탑승은 포함하지 않습니다.
 2. 각 day.items는 5~8개 정도로, 이동/식사/관광/휴식 등을 포함
 3. 모든 날짜는 YYYY-MM-DD 형식, 시간은 HH:MM 형식
-4. 각 day.items[] 배열의 각 item에 cost 필드를 포함하여 해당 활동의 예상 비용을 명시하세요
+${arrivalTime ? `4. **항공편 도착 시간 반영 (필수):** 첫날(${startDate})의 첫 번째 활동 시간은 ${arrivalTime} 이후여야 합니다. 공항에서 출발하여 숙소나 첫 번째 활동 장소까지 이동 시간을 고려하여, 실제로 활동을 시작할 수 있는 시간부터 일정을 시작하세요.` : '4. 첫날 일정은 여행지 공항 도착 후 오전부터 시작 가능합니다.'}
+${departureTime ? `5. **항공편 출발 시간 반영 (필수):** 마지막 날(${endDate})의 마지막 활동 시간은 ${departureTime} 이전이어야 합니다. 마지막 활동 장소에서 공항까지 이동 시간을 고려하여, 공항 도착 시간이 ${departureTime} 이전이 되도록 일정을 종료하세요.` : '5. 마지막 날 일정은 여행지 공항 도착까지 오후까지 가능합니다.'}
+${arrivalTime || departureTime ? '6' : '4'}. 각 day.items[] 배열의 각 item에 cost 필드를 포함하여 해당 활동의 예상 비용을 명시하세요
    - cost는 숫자(원)로 표시
    - 각 날짜의 모든 item.cost의 합이 daily_estimated_cost와 일치하도록 계산
-5. 각 day.daily_estimated_cost는 해당 날짜의 모든 활동(식사, 교통, 관광지 입장료, 숙박 등) 비용을 합산한 값입니다
+${arrivalTime || departureTime ? '7' : '5'}. 각 day.daily_estimated_cost는 해당 날짜의 모든 활동(식사, 교통, 관광지 입장료, 숙박 등) 비용을 합산한 값입니다
    - 첫날/마지막날은 항공편 비용을 포함할 수 있음
    - 숙박 비용은 해당 날짜에 머무는 날 기준으로 계산 (예: 2일차는 1박 숙박비 포함)
    - 식사, 교통, 관광지, 기타 활동 비용을 모두 합산
-5. estimated_budget.total_amount는 반드시 breakdown의 6개 항목(flight_cost + accommodation_cost + local_transport_cost + food_and_drink_cost + activities_and_tours_cost + contingency_and_misc)의 합계와 정확히 일치해야 합니다
+${arrivalTime || departureTime ? '8' : '6'}. estimated_budget.total_amount는 반드시 breakdown의 6개 항목(flight_cost + accommodation_cost + local_transport_cost + food_and_drink_cost + activities_and_tours_cost + contingency_and_misc)의 합계와 정확히 일치해야 합니다
    - 항공권 비용(flight_cost)을 포함한 6개 항목의 합계 = total_amount
    - 각 breakdown 항목의 값을 합산하여 total_amount와 일치하는지 반드시 검증하세요
-6. **중요: 모든 날짜별 예상 비용(daily_estimated_cost)의 합계가 총 예상 예산(estimated_budget.total_amount)과 일치하도록 검토하세요.**
+${arrivalTime || departureTime ? '9' : '7'}. **중요: 모든 날짜별 예상 비용(daily_estimated_cost)의 합계가 총 예상 예산(estimated_budget.total_amount)과 일치하도록 검토하세요.**
    - 각 날짜의 daily_estimated_cost를 합산하여 총액과 비교
    - 차이가 있으면 각 날짜의 비용을 조정하여 총 예산과 일치시킴
    - 예산 분배 비율(breakdown)과 날짜별 비용 분배가 논리적으로 일치해야 함
-7. **이동 시간 정보 (필수):**
+${arrivalTime || departureTime ? '10' : '8'}. **이동 시간 정보 (필수):**
    - 각 day.items[] 배열의 각 item에 next_move_duration 필드를 포함하세요
    - 이 필드에는 해당 활동을 마친 후 다음 활동으로 이동하는 데 걸리는 예상 시간을 기록하세요
    - 형식: "지하철 15분", "도보 5분", "택시 20분", "버스 10분" 등
    - 마지막 활동의 경우 빈 문자열("")로 둘 수 있습니다
-8. **이미지 검색 링크 (선택사항):**
-   - 각 day.items[] 배열의 각 item에 image_search_link 필드를 포함하세요
+${arrivalTime || departureTime ? '11' : '9'}. **이미지 검색 링크 및 이미지 쿼리 (선택사항):**
+   - 각 day.items[] 배열의 각 item에 image_search_link와 activity_image_query 필드를 포함하세요
    - **중요:** 실제 구체적인 장소나 관광지가 있는 활동에만 이미지 검색 링크를 생성하세요
    - 이미지 검색 링크를 생성해야 하는 활동: 관광지, 박물관, 공원, 특정 건축물, 유명 명소, 특정 카페나 식당 이름 등
-   - 이미지 검색 링크를 생성하지 않아야 하는 활동: "숙소 체크인", "휴식", "자유 시간", "쇼핑", "식사" 등 일반적인 활동
+   - 이미지 검색 링크를 생성하지 않아야 하는 활동: "숙소 체크인", "휴식", "자유 시간", "쇼핑", "식사", "공항 도착", "공항 출발", "공항으로 이동", "공항 도착", "체크인", "체크아웃", "출발", "도착", "공항", "airport", "도착지 공항", "출발지 공항" 등 일반적인 활동 및 공항 관련 활동
    - 링크 생성 형식: https://www.google.com/search?q={장소명}+${destination}+여행&tbm=isch
    - 예: "에펠탑" 활동의 경우 -> https://www.google.com/search?q=에펠탑+파리+여행&tbm=isch
    - 일반적인 활동의 경우 빈 문자열("")을 반환하세요
    - URL은 URL 인코딩이 필요하므로, 장소명과 목적지를 URL 인코딩하여 포함하세요
-9. **숙소 선정 이유 (필수):**
+   - activity_image_query 필드: image_search_link가 빈 문자열이 아닌 경우, 해당 명소의 영어 이름을 포함한 검색어를 반환하세요
+   - **핵심 (절대 준수):** **해당 장소의 외관, 정문, 또는 가장 상징적인 모습을 보여주는 풍경 사진을 찾기 위한 구체적인 영어 검색어**를 반환하세요
+   - **검색어 포함 필수 요소 (반드시 준수):** 장소 이름과 함께 **'photograph'**, **'view'**, **'exterior'**, **'main entrance'** 중 **최소 하나를 반드시 포함**하여 사진(Photo) 검색을 유도하세요
+   - **검색어 예시:**
+     * "Eiffel Tower main view photograph"
+     * "Louvre Museum exterior"
+     * "Berlin Reichstag Building front view"
+     * "Times Square panoramic view photograph"
+     * "Central Park scenic view"
+   - 명소의 특성에 따라 적절한 키워드를 선택하여 대표성 높은 사진을 찾기 위한 구체적인 영어 검색어를 반환하세요
+   - **명소 타입별 검색어 전략 (매우 구체적으로 작성):**
+     * **구역/광장/시장/거리 (예: 명동, 신주쿠, 타임스퀘어, 부티크거리):** 
+       - 형식: "{place 이름} {destination} panoramic view" 또는 "{place 이름} {destination} street scene" 또는 "{place 이름} {destination} overview photograph" 또는 "{place 이름} {destination} famous area photograph"
+       - 예시: "Myeongdong Seoul panoramic view", "Times Square New York famous landmark overview", "Shibuya Tokyo street scene photograph", "Harajuku Tokyo famous district view"
+       - 추가 키워드: "famous", "popular", "tourist", "vibrant", "bustling" 등
+     * **건물/랜드마크/기념물 (예: 에펠탑, 루브르 박물관, 브란덴부르크 문, 사원):** 
+       - 형식: "{place 이름} {destination} exterior photograph" 또는 "{place 이름} {destination} full view" 또는 "{place 이름} {destination} main entrance" 또는 "{place 이름} {destination} famous landmark"
+       - 예시: "Eiffel Tower Paris full view photograph", "Louvre Museum Paris exterior famous", "Brandenburg Gate Berlin landmark photograph", "Senso-ji Tokyo temple exterior view"
+       - 추가 키워드: "iconic", "famous", "landmark", "monument", "architecture"
+     * **박물관/미술관:**
+       - 형식: "{place 이름} {destination} museum exterior" 또는 "{place 이름} {destination} art gallery building" 또는 "{place 이름} {destination} museum entrance photograph"
+       - 예시: "British Museum London exterior", "Metropolitan Museum New York building view", "Uffizi Gallery Florence entrance photograph"
+     * **공원/정원:**
+       - 형식: "{place 이름} {destination} park view" 또는 "{place 이름} {destination} garden scenic view" 또는 "{place 이름} {destination} park landscape photograph"
+       - 예시: "Central Park New York landscape view", "Hyde Park London scenic view", "Gyeongbokgung Seoul palace garden view"
+     * **시장/음식거리:**
+       - 형식: "{place 이름} {destination} market scene" 또는 "{place 이름} {destination} food street photograph" 또는 "{place 이름} {destination} market vibrant view"
+       - 예시: "Tsukiji Market Tokyo food scene", "Gwangjang Market Seoul food street photograph", "Borough Market London market view"
+     * **카페/레스토랑 (유명한 곳):**
+       - 형식: "{place 이름} {destination} restaurant exterior" 또는 "{place 이름} {destination} cafe interior view" 또는 "{place 이름} {destination} famous restaurant photograph"
+       - 예시: "Blue Bottle Coffee Tokyo cafe interior", "Angelina Paris cafe exterior", "Joe's Pizza New York famous restaurant"
+   - **공통 필수 요소:** 
+     * 모든 검색어에 **'photograph'** 또는 **'view'** 또는 **'photo'** 키워드를 반드시 포함하여 사진 검색을 유도하세요
+     * 장소의 유명도나 특성을 나타내는 키워드(famous, iconic, popular, scenic, vibrant 등)를 적절히 활용하세요
+     * 도시/여행지 이름({destination})을 포함하여 검색 정확도를 높이세요
+   - image_search_link가 빈 문자열이면 activity_image_query도 빈 문자열("")을 반환하세요
+${arrivalTime || departureTime ? '12' : '10'}. **공식 웹사이트 및 티켓 검색 링크 (예약 필요 여부에 따라 세분화):**
+   - 각 day.items[] 배열의 각 item에 다음 두 필드를 포함하세요:
+     * **official_website_link**: 해당 활동(건물, 명소)의 공식 웹사이트 URL을 저장합니다 (정보 획득 목적)
+     * **purchase_search_link**: Klook에서 해당 활동을 검색한 결과 페이지 URL (티켓 구매 탐색 목적)
+   - **핵심 조건 (절대 준수):**
+     * **모든 이벤트성 활동 (식사, 숙박, 휴식 제외):** image_search_link를 반환합니다 (위 8번 참조)
+     * **이벤트성 활동 중, 예약/티켓 구매가 필요하다고 판단한 활동만:** official_website_link와 purchase_search_link 두 필드 모두를 반환합니다
+     * **그 외의 모든 활동 (식사, 이동, 휴식) 및 예약이 불필요한 이벤트성 활동:** official_website_link와 purchase_search_link 필드는 반드시 빈 문자열("")을 반환하세요
+   - **예약/티켓 구매가 필요한 활동 예시:** 박물관, 테마파크, 공연장, 특별 체험 프로그램, 전시회, 뮤지컬, 콘서트, 유료 투어 프로그램, 스카이덱 입장 등
+   - **예약이 불필요한 이벤트성 활동 예시:** 무료 공원, 무료 거리 산책, 무료 광장 방문, 일반적인 카페 방문 등
+   - **비이벤트성 활동 (식사, 숙박, 휴식, 이동, 공항 이동):** official_website_link와 purchase_search_link 필드에 반드시 빈 문자열("")을 반환하세요
+   - **공항 관련 활동 (공항 도착, 공항 출발, 공항으로 이동 등)에는 절대 이미지 검색 링크, 공식 웹사이트 링크, 티켓 검색 링크를 생성하지 마세요. 이들은 여행의 핵심 포인트가 아닙니다.**
+   - 예약이 필요한 이벤트성 활동의 경우:
+     * Google Search Tool을 사용하여 해당 활동의 공식 웹사이트 URL을 찾아 official_website_link 필드에 포함
+     * purchase_search_link는 Klook 검색 URL을 직접 생성: https://www.klook.com/ko/search?query={활동 이름}
+     * 활동 이름은 URL 인코딩하여 삽입하세요 (예: "에펠탑" -> "https://www.klook.com/ko/search?query=%EC%97%90%ED%8E%A0%ED%83%91")
+   - 두 링크 모두 찾지 못할 경우: 빈 문자열("")을 반환하세요 (null이 아닌 빈 문자열)
+${arrivalTime || departureTime ? '13' : '11'}. **여행지 대표 이미지 쿼리 (필수):**
+   - summary.destination_image_query 필드에 여행지(도시 또는 국가)의 도시 전경(skyline, cityscape)을 나타내는 영어 검색어를 반환하세요
+   - **핵심 (절대 준수):** 해당 여행지의 도시 전경을 넓은 화각으로 보여주는 이미지를 찾기 위한 구체적인 영어 검색어를 반환하세요
+   - **우선순위:** 도시 전경(skyline, cityscape, city view)을 최우선으로 하고, 랜드마크는 보조적으로 사용하세요
+   - 형식: "{도시/국가 이름} skyline" 또는 "{도시/국가 이름} cityscape" 또는 "{도시/국가 이름} city view"
+   - **영어 검색어 예시 (도시 전경 우선):**
+     * "New York City skyline"
+     * "Paris cityscape"
+     * "Berlin city view"
+     * "Tokyo skyline ultrawide"
+     * "London cityscape panoramic"
+     * "Seoul skyline"
+   - 도시 전경 이미지를 찾을 수 없는 경우에만, 해당 도시/국가의 가장 유명한 랜드마크를 포함한 검색어를 사용하세요
+   - **이미지 비율 및 품질 우선순위 (최대한 강력하게 강조):** 21:9 비율에 가까운 도시 전경 사진을 우선적으로 찾기 위해 반드시 "skyline", "cityscape", "city view", "ultrawide", "panoramic" 등의 키워드를 포함하세요
+   - 이 필드는 클라이언트에서 Wikimedia Commons 이미지를 검색하는 데 사용되며, 21:9 비율에 적합한 도시 전경 이미지를 최우선으로 찾아야 합니다
+${arrivalTime || departureTime ? '14' : '12'}. **숙소 선정 이유 (필수):**
    - summary.accommodation_selection_reason 필드에 숙소 위치 선정 이유를 상세히 작성하세요
    - '교통 편리성'과 '주요 활동 영역 근접성'을 고려한 이유를 명확히 설명하세요
    - 예: "선택한 숙소는 지하철 2호선과 5호선 환승역 근처에 위치하여 주요 관광지(에펠탑, 루브르 박물관, 노트르담 등) 접근이 용이합니다."
-10. **숙소 검색 지역 (필수):**
+${arrivalTime || departureTime ? '15' : '13'}. **숙소 검색 지역 (필수):**
    - summary.accommodation_search_area 필드에 Booking.com에서 검색에 사용될 구체적인 지역 이름만을 작성하세요
    - accommodation_selection_reason에서 언급한 지역명을 기반으로, 검색에 최적화된 지역명만을 명시하세요
    - 형식: "마레 지구", "명동역 근처", "신주쿠역", "홍대입구역" 등
    - 도시명은 포함하지 않고 지역명만 작성하세요
-9. summary.tips는 5개 정도의 여행 팁 배열
-10. summary.overview는 여행지 소개 및 전반적인 정보
-11. summary.notes는 주의사항 등
-12. 예산은 한국 원화(KRW) 기준으로 산출
-13. 최신 2024-2025년 기준 물가를 반영
-14. **공항 정보**: 여행 계획에서 항공편 관련 내용이 있을 경우, destination_airport_code를 기반으로 실제 공항 이름을 언급하여 계획의 구체성을 높이세요
+${arrivalTime || departureTime ? '16' : '14'}. summary.tips는 5개 정도의 여행 팁 배열
+${arrivalTime || departureTime ? '17' : '15'}. summary.overview는 여행지 소개 및 전반적인 정보
+${arrivalTime || departureTime ? '18' : '16'}. summary.notes는 주의사항 등
+${arrivalTime || departureTime ? '19' : '17'}. 예산은 한국 원화(KRW) 기준으로 산출
+${arrivalTime || departureTime ? '20' : '18'}. 최신 2024-2025년 기준 물가를 반영
+${arrivalTime || departureTime ? '21' : '19'}. **공항 정보**: 여행 계획에서 항공편 관련 내용이 있을 경우, destination_airport_code를 기반으로 실제 공항 이름을 언급하여 계획의 구체성을 높이세요
     - 예: "인천국제공항(ICN) 출발", "${destination}국제공항(${destinationIataCode || '공항코드'}) 도착" 등
     - 공항명을 정확히 명시하여 사용자가 여행 계획을 더 잘 이해할 수 있도록 하세요
 
@@ -314,6 +393,8 @@ ${destinationIataCode ? `- destination_airport_code: ${destinationIataCode} (${d
         destination,
         startDate,
         endDate,
+        arrivalTime: arrivalTime || null,
+        departureTime: departureTime || null,
         estimated_budget: parsed.estimated_budget,
         external_links,
         summary: parsed.summary || {},

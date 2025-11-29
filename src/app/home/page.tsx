@@ -131,7 +131,7 @@ export default function HomePage() {
               <Input
                 id="destination"
                 name="destination"
-                placeholder="예: 제주도, 부산, 서울"
+                placeholder="예: 파리, 도쿄, 뉴욕, 로마"
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
                 required
