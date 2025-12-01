@@ -98,7 +98,19 @@ export default function HomePage() {
   }
 
   return (
-    <div className="container py-8 max-w-4xl">
+    <div className="relative min-h-screen">
+      {/* 배경 이미지 */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50/90 via-purple-50/90 to-pink-50/90 dark:from-blue-950/40 dark:via-purple-950/40 dark:to-pink-950/40" />
+        <img
+          src="https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2000&auto=format&fit=crop"
+          alt="여행 배경"
+          className="absolute inset-0 w-full h-full object-cover opacity-20 dark:opacity-10"
+        />
+      </div>
+      
+      {/* 컨텐츠 */}
+      <div className="relative z-10 container py-8 max-w-4xl">
       {/* Hero Section */}
       <section className="text-center space-y-6 py-12 mb-12">
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
@@ -232,6 +244,7 @@ export default function HomePage() {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 }

@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Compass, Calendar, HelpCircle, User, Sparkles } from 'lucide-react';
+import { Home, Compass, Calendar, HelpCircle, User, Sparkles, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
 
 const navigation = [
   { name: '홈', href: '/home', icon: Home },
@@ -13,6 +15,13 @@ const navigation = [
 
 export default function Header() {
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // 다크모드 토글 버튼의 하이드레이션 이슈 방지
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -44,6 +53,21 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center space-x-4">
+          {/* 다크모드 토글 버튼 */}
+          {mounted && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              aria-label="다크모드 토글"
+            >
+              {theme === 'dark' ? (
+                <Sun className="h-5 w-5" />
+              ) : (
+                <Moon className="h-5 w-5" />
+              )}
+            </Button>
+          )}
           <Button variant="ghost" size="icon" asChild>
             <Link href="/profile">
               <User className="h-5 w-5" />
@@ -72,6 +96,21 @@ export default function Header() {
               </Link>
             );
           })}
+          {/* 모바일 다크모드 토글 버튼 */}
+          {mounted && (
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="flex flex-col items-center space-y-1 px-3 py-2 text-xs transition-colors text-muted-foreground hover:text-primary"
+              aria-label="다크모드 토글"
+            >
+              {theme === 'dark' ? (
+                <Sun className="h-5 w-5" />
+              ) : (
+                <Moon className="h-5 w-5" />
+              )}
+              <span>테마</span>
+            </button>
+          )}
         </nav>
       </div>
     </header>
