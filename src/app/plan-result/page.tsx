@@ -83,6 +83,8 @@ interface PlanData {
   endDate: string;
   arrivalTime?: string | null;
   departureTime?: string | null;
+  people?: number;
+  rooms?: number;
   estimated_budget?: EstimatedBudget;
   external_links?: ExternalLinks;
   summary: Summary;
@@ -702,6 +704,21 @@ function PlanResultContent() {
     return fetchGoogleMapsImageForActivity(trimmed, destination);
   };
 
+  // 타임아웃이 있는 fetch 래퍼 함수 (공통)
+  const fetchWithTimeout = async (url: string, timeout: number = 10000): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  };
+
   // Wikimedia 이미지 로드 함수 (단일 이미지 URL 반환 - 일정 항목용, 필터링 강화)
   const fetchWikimediaImageForActivity = async (query: string): Promise<string | null> => {
     if (!query || query.trim() === '') return null;
@@ -842,11 +859,7 @@ function PlanResultContent() {
         const encodedQuery = encodeURIComponent(searchTerm);
         const searchUrl = `https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodedQuery}&srnamespace=6&srlimit=${searchLimit}&format=json&origin=*`;
         
-        const searchResponse = await fetch(searchUrl, {
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
+        const searchResponse = await fetchWithTimeout(searchUrl, 10000);
         if (!searchResponse.ok) {
           console.warn(`[이미지 검색] HTTP 오류: ${searchResponse.status} for "${searchTerm}"`);
           return null;
@@ -887,11 +900,7 @@ function PlanResultContent() {
             // 실제 이미지 파일 URL 요청
             const imageInfoUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=File:${encodeURIComponent(fileName)}&prop=imageinfo&iiprop=url&format=json&origin=*`;
             
-            const imageResponse = await fetch(imageInfoUrl, {
-              headers: {
-                'Accept': 'application/json',
-              },
-            });
+            const imageResponse = await fetchWithTimeout(imageInfoUrl, 8000);
             if (!imageResponse.ok) {
               continue;
             }
@@ -921,7 +930,16 @@ function PlanResultContent() {
         
         return null;
       } catch (error) {
-        console.error(`[이미지 검색] 오류 for "${searchTerm}":`, error);
+        // 네트워크 오류나 타임아웃 등 다양한 에러 처리
+        if (error instanceof Error) {
+          if (error.name === 'AbortError') {
+            console.warn(`[이미지 검색] 타임아웃: "${searchTerm}"`);
+          } else {
+            console.warn(`[이미지 검색] 오류: "${searchTerm}" - ${error.message}`);
+          }
+        } else {
+          console.warn(`[이미지 검색] 알 수 없는 오류: "${searchTerm}"`);
+        }
         return null;
       }
     };
@@ -1164,8 +1182,11 @@ function PlanResultContent() {
         const encodedQuery = encodeURIComponent(searchTerm);
         const searchUrl = `https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodedQuery}&srnamespace=6&srlimit=${searchLimit}&format=json&origin=*`;
         
-        const searchResponse = await fetch(searchUrl);
-        if (!searchResponse.ok) return [];
+        const searchResponse = await fetchWithTimeout(searchUrl, 10000);
+        if (!searchResponse.ok) {
+          console.warn(`[Wikimedia 검색] HTTP 오류: ${searchResponse.status}`);
+          return [];
+        }
         
         const searchData = await searchResponse.json();
         const searchResults = searchData.query?.search;
@@ -1276,29 +1297,34 @@ function PlanResultContent() {
           }
           
           // 2단계: 실제 이미지 파일 URL 요청 (크기 정보 포함)
-          const imageInfoUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=File:${encodeURIComponent(fileName)}&prop=imageinfo&iiprop=url|size&format=json&origin=*`;
-          
-          const imageResponse = await fetch(imageInfoUrl);
-          if (!imageResponse.ok) continue;
-          
-          const imageData = await imageResponse.json();
-          const pages = imageData.query?.pages;
-          
-          if (!pages) continue;
-          
-          // 이미지 URL 추출
-          const pageId = Object.keys(pages)[0];
-          const imageInfo = pages[pageId]?.imageinfo;
-          
-          if (imageInfo && imageInfo.length > 0 && imageInfo[0].url) {
-            const url = imageInfo[0].url;
-            const size = imageInfo[0].width || 0;
+          try {
+            const imageInfoUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=File:${encodeURIComponent(fileName)}&prop=imageinfo&iiprop=url|size&format=json&origin=*`;
             
-            // 최소 크기 필터링 (너무 작은 이미지 제외 - 최소 800px)
-            if (size >= 800) {
-              const priority = getImagePriority(url, fileName);
-              imageCandidates.push({ url, priority, fileName });
+            const imageResponse = await fetchWithTimeout(imageInfoUrl, 8000);
+            if (!imageResponse.ok) continue;
+            
+            const imageData = await imageResponse.json();
+            const pages = imageData.query?.pages;
+            
+            if (!pages) continue;
+            
+            // 이미지 URL 추출
+            const pageId = Object.keys(pages)[0];
+            const imageInfo = pages[pageId]?.imageinfo;
+            
+            if (imageInfo && imageInfo.length > 0 && imageInfo[0].url) {
+              const url = imageInfo[0].url;
+              const size = imageInfo[0].width || 0;
+              
+              // 최소 크기 필터링 (너무 작은 이미지 제외 - 최소 800px)
+              if (size >= 800) {
+                const priority = getImagePriority(url, fileName);
+                imageCandidates.push({ url, priority, fileName });
+              }
             }
+          } catch (error) {
+            // 개별 이미지 정보 요청 실패 시 건너뛰기
+            continue;
           }
         }
         
@@ -1307,7 +1333,16 @@ function PlanResultContent() {
         
         return imageCandidates;
       } catch (error) {
-        console.error('Wikimedia 이미지 검색 오류:', error);
+        // 네트워크 오류나 타임아웃 등 다양한 에러 처리
+        if (error instanceof Error) {
+          if (error.name === 'AbortError') {
+            console.warn(`[Wikimedia 검색] 타임아웃: "${searchTerm}"`);
+          } else {
+            console.warn(`[Wikimedia 검색] 오류: "${searchTerm}" - ${error.message}`);
+          }
+        } else {
+          console.warn(`[Wikimedia 검색] 알 수 없는 오류: "${searchTerm}"`);
+        }
         return [];
       }
     };
@@ -3269,7 +3304,30 @@ function PlanResultContent() {
                               className="w-full h-auto py-4 px-4 justify-start hover:bg-primary hover:text-primary-foreground transition-colors"
                             >
                               <a
-                                href={planData.external_links.accommodation_search_url}
+                                href={(() => {
+                                  const baseUrl = planData.external_links.accommodation_search_url;
+                                  const people = planData.people || 1;
+                                  const rooms = planData.rooms || 1;
+                                  let url = baseUrl;
+                                  
+                                  // 인원수 업데이트
+                                  if (url.includes('group_adults=')) {
+                                    url = url.replace(/group_adults=\d+/, `group_adults=${people}`);
+                                  } else {
+                                    const separator = url.includes('?') ? '&' : '?';
+                                    url = `${url}${separator}group_adults=${people}`;
+                                  }
+                                  
+                                  // 방 개수 업데이트
+                                  if (url.includes('no_rooms=')) {
+                                    url = url.replace(/no_rooms=\d+/, `no_rooms=${rooms}`);
+                                  } else {
+                                    const separator = url.includes('?') ? '&' : '?';
+                                    url = `${url}${separator}no_rooms=${rooms}`;
+                                  }
+                                  
+                                  return url;
+                                })()}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-3"

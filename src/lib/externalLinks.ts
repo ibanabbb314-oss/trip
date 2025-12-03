@@ -58,12 +58,16 @@ export function createFlightSearchUrl(
  * @param startDate 출발일 (YYYY-MM-DD)
  * @param endDate 귀국일 (YYYY-MM-DD)
  * @param searchArea AI가 분석한 최적 숙소 검색 지역 (선택사항)
+ * @param people 인원수 (선택사항, 기본값 1)
+ * @param rooms 방 개수 (선택사항, 기본값 1)
  */
 export function createAccommodationSearchUrl(
   destination: string,
   startDate: string,
   endDate: string,
-  searchArea?: string | null
+  searchArea?: string | null,
+  people?: number | null,
+  rooms?: number | null
 ): string {
   // 검색 문자열 구성: destination + searchArea (있는 경우)
   let searchString = destination.trim();
@@ -75,8 +79,13 @@ export function createAccommodationSearchUrl(
   // 한글 지역명이나 공백이 포함된 검색어가 Booking.com에서 정상적으로 인식되도록 보장
   const encodedSearchString = encodeURIComponent(searchString);
   
+  // 인원수 파라미터 (group_adults)
+  const adults = people && people > 0 ? people : 1;
+  // 방 개수 파라미터 (no_rooms)
+  const roomCount = rooms && rooms > 0 ? rooms : 1;
+  
   // checkin과 checkout 날짜 형식: YYYY-MM-DD
-  return `https://www.booking.com/searchresults.ko.html?ss=${encodedSearchString}&checkin=${startDate}&checkout=${endDate}`;
+  return `https://www.booking.com/searchresults.ko.html?ss=${encodedSearchString}&checkin=${startDate}&checkout=${endDate}&group_adults=${adults}&no_rooms=${roomCount}`;
 }
 
 /**
@@ -86,20 +95,24 @@ export function createAccommodationSearchUrl(
  * @param endDate 귀국일 (YYYY-MM-DD)
  * @param destinationIataCode 목적지 IATA 공항 코드 (선택사항)
  * @param accommodationSearchArea AI가 분석한 최적 숙소 검색 지역 (선택사항)
+ * @param people 인원수 (선택사항, 기본값 1)
+ * @param rooms 방 개수 (선택사항, 기본값 1)
  */
 export function createExternalLinks(
   destination: string,
   startDate: string,
   endDate: string,
   destinationIataCode?: string | null,
-  accommodationSearchArea?: string | null
+  accommodationSearchArea?: string | null,
+  people?: number | null,
+  rooms?: number | null
 ): {
   flight_search_url: string;
   accommodation_search_url: string;
 } {
   return {
     flight_search_url: createFlightSearchUrl(destination, startDate, endDate, destinationIataCode),
-    accommodation_search_url: createAccommodationSearchUrl(destination, startDate, endDate, accommodationSearchArea),
+    accommodation_search_url: createAccommodationSearchUrl(destination, startDate, endDate, accommodationSearchArea, people, rooms),
   };
 }
 

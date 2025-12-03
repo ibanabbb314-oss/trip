@@ -8,7 +8,7 @@ import { format, addDays, parseISO } from 'date-fns';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { destination, startDate, endDate, people, arrivalTime, departureTime } = body || {};
+    const { destination, startDate, endDate, people, rooms, arrivalTime, departureTime } = body || {};
     // budget 필드는 이제 선택사항이며, AI가 자동으로 계산함
 
     if (!destination || !startDate || !endDate) {
@@ -570,7 +570,9 @@ ${arrivalTime || departureTime ? '21' : '19'}. **공항 정보**: 여행 계획�
       startDate, 
       endDate, 
       destinationIataCode,
-      accommodationSearchArea
+      accommodationSearchArea,
+      people ?? 1,
+      rooms ?? 1
     );
     
     // 디버깅 출력 (임시)
@@ -609,6 +611,8 @@ ${arrivalTime || departureTime ? '21' : '19'}. **공항 정보**: 여행 계획�
         endDate,
         arrivalTime: arrivalTime || null,
         departureTime: departureTime || null,
+        people: people ?? 1,
+        rooms: rooms ?? 1,
         estimated_budget: parsed.estimated_budget,
         external_links,
         summary: parsed.summary || {},

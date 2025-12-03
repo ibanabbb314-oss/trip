@@ -14,6 +14,7 @@ export default function HomePage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [travelers, setTravelers] = useState(2);
+  const [rooms, setRooms] = useState(1);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +31,7 @@ export default function HomePage() {
         startDate,
         endDate,
         people: travelers,
+        rooms: rooms,
       };
 
       const res = await fetch('/api/plan', {
@@ -50,6 +52,8 @@ export default function HomePage() {
         destination: data.destination,
         startDate: data.startDate,
         endDate: data.endDate,
+        people: data.people,
+        rooms: data.rooms,
         estimated_budget: data.estimated_budget,
         external_links: data.external_links,
         summary: data.summary,
@@ -185,23 +189,43 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="travelers" className="text-base font-medium">
-                인원 (선택)
-              </Label>
-              <Input
-                id="travelers"
-                name="people"
-                type="number"
-                min="1"
-                value={travelers}
-                onChange={(e) => setTravelers(Number(e.target.value))}
-                disabled={loading}
-                className="h-12"
-              />
-              <p className="text-sm text-muted-foreground">
-                인원수를 입력하면 더 정확한 비용을 계산할 수 있습니다.
-              </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="travelers" className="text-base font-medium">
+                  인원 (선택)
+                </Label>
+                <Input
+                  id="travelers"
+                  name="people"
+                  type="number"
+                  min="1"
+                  value={travelers}
+                  onChange={(e) => setTravelers(Number(e.target.value))}
+                  disabled={loading}
+                  className="h-12"
+                />
+                <p className="text-sm text-muted-foreground">
+                  인원수를 입력하면 더 정확한 비용을 계산할 수 있습니다.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rooms" className="text-base font-medium">
+                  방 개수 (선택)
+                </Label>
+                <Input
+                  id="rooms"
+                  name="rooms"
+                  type="number"
+                  min="1"
+                  value={rooms}
+                  onChange={(e) => setRooms(Number(e.target.value))}
+                  disabled={loading}
+                  className="h-12"
+                />
+                <p className="text-sm text-muted-foreground">
+                  숙소 검색 시 필요한 방 개수를 입력하세요.
+                </p>
+              </div>
             </div>
 
             <Button
